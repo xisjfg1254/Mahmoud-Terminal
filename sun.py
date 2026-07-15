@@ -6,7 +6,7 @@ import pandas as pd
 app_state = {
     "price": 0.0,
     "status": "WAITING...",
-    "indicators": {"RSI": "WAIT", "EMA": "WAIT", "ADX": "WAIT"},
+    "indicators": {"RSI": "WAIT", "EMA": "WAIT", "ADX": "WAIT", "MACD": "WAIT", "BB": "WAIT"},
     "master_signal": "WAIT",
     "sl": 0.0,
     "tp": 0.0
@@ -21,6 +21,7 @@ def get_color(status):
 
 def trading_engine(api_key, token, chat_id, timeframe):
     global app_state
+    
     def on_message(ws, message):
         data = json.loads(message)
         if 'price' in data: app_state["price"] = float(data['price'])
@@ -36,17 +37,32 @@ def trading_engine(api_key, token, chat_id, timeframe):
                 df = pd.DataFrame(response['values']).iloc[::-1].reset_index(drop=True)
                 df[['high', 'low', 'close']] = df[['high', 'low', 'close']].astype(float)
                 
+                # 1. RSI
                 rsi = ta.momentum.rsi(df['close'], window=14).iloc[-1]
+                # 2. ADX
                 adx = ta.trend.adx(df['high'], df['low'], df['close'], window=14).iloc[-1]
+                # 3. EMA 200
                 ema200 = ta.trend.ema_indicator(df['close'], window=200).iloc[-1]
+                # 4. MACD
+                macd_ind = ta.trend.MACD(df['close'])
+                macd = macd_ind.macd().iloc[-1]
+                macd_sig = macd_ind.macd_signal().iloc[-1]
+                # 5. Bollinger Bands
+                bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
+                bb_h = bb.bollinger_hband().iloc[-1]
+                bb_l = bb.bollinger_lband().iloc[-1]
                 
+                # تحديث الحالة لكل مؤشر
                 app_state["indicators"]["RSI"] = "BUY" if rsi < 35 else ("SELL" if rsi > 65 else "WAIT")
                 app_state["indicators"]["EMA"] = "BUY" if app_state["price"] > ema200 else "SELL"
                 app_state["indicators"]["ADX"] = "BUY" if adx > 25 else "WAIT"
+                app_state["indicators"]["MACD"] = "BUY" if macd > macd_sig else "SELL"
+                app_state["indicators"]["BB"] = "BUY" if app_state["price"] < bb_l else ("SELL" if app_state["price"] > bb_h else "WAIT")
                 
                 buys = list(app_state["indicators"].values()).count("BUY")
                 sells = list(app_state["indicators"].values()).count("SELL")
                 
+                # تحديد الإشارة العامة
                 if buys > sells and buys >= 2:
                     app_state["master_signal"] = "BUY"
                     app_state["sl"] = round(app_state["price"] * (1 - SL_PERC), 2)
@@ -59,8 +75,10 @@ def trading_engine(api_key, token, chat_id, timeframe):
                     app_state["master_signal"] = "WAIT"
                     app_state["sl"] = 0.0
                     app_state["tp"] = 0.0
+                
                 app_state["status"] = "ACTIVE"
-        except: app_state["status"] = "ERROR"
+        except Exception as e:
+            app_state["status"] = f"ERR: {str(e)[:10]}"
         time.sleep(30)
 
 def main(page: ft.Page):
@@ -72,15 +90,19 @@ def main(page: ft.Page):
     # تصميم المربعات
     def create_tile(title, value, color=ft.colors.WHITE):
         return ft.Container(
-            content=ft.Column([ft.Text(title, size=10, color=ft.colors.GREY), ft.Text(value, size=16, weight="bold", color=color)], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=100, height=80, bgcolor=ft.colors.with_opacity(0.1, ft.colors.WHITE),
-            border=ft.border.all(1, ft.colors.GREEN), border_radius=10, padding=10
+            content=ft.Column([ft.Text(title, size=10, color=ft.colors.GREY), ft.Text(value, size=14, weight="bold", color=color)], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=80, height=70, bgcolor=ft.colors.with_opacity(0.1, ft.colors.WHITE),
+            border=ft.border.all(1, ft.colors.GREEN), border_radius=10, padding=5
         )
 
+    # إنشاء المربعات
     price_tile = create_tile("PRICE", "0.00", ft.colors.WHITE)
     signal_tile = create_tile("SIGNAL", "WAIT", ft.colors.YELLOW)
     sl_tile = create_tile("SL", "0.00", ft.colors.RED_ACCENT)
     tp_tile = create_tile("TP", "0.00", ft.colors.GREEN_ACCENT)
+    
+    # مربعات المؤشرات
+    ind_tiles = {k: create_tile(k, "WAIT") for k in app_state["indicators"]}
 
     def start_app(e):
         page.clean()
@@ -88,7 +110,9 @@ def main(page: ft.Page):
             ft.Text("MAHMOUD DASHBOARD", size=25, weight="bold", color=ft.colors.GREEN),
             ft.Row([price_tile, signal_tile], alignment=ft.MainAxisAlignment.CENTER),
             ft.Row([sl_tile, tp_tile], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Divider()
+            ft.Divider(),
+            ft.Text("INDICATORS", size=15, color=ft.colors.GREEN),
+            ft.Row([t for t in ind_tiles.values()], alignment=ft.MainAxisAlignment.CENTER, wrap=True)
         )
         threading.Thread(target=trading_engine, args=(api_field.value, token_field.value, chat_field.value, tf_dropdown.value), daemon=True).start()
         threading.Thread(target=update_ui, args=(page,), daemon=True).start()
@@ -100,6 +124,12 @@ def main(page: ft.Page):
             signal_tile.content.controls[1].color = get_color(app_state["master_signal"])
             sl_tile.content.controls[1].value = str(app_state['sl'])
             tp_tile.content.controls[1].value = str(app_state['tp'])
+            
+            for key, tile in ind_tiles.items():
+                val = app_state["indicators"].get(key, "WAIT")
+                tile.content.controls[1].value = val
+                tile.content.controls[1].color = get_color(val)
+                
             page.update()
             time.sleep(1)
 
