@@ -29,13 +29,11 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pandas-ta
       
       - name: Accept Android licenses
         run: yes "y" | flutter doctor --android-licenses
       
       - name: Build APK
-        # أضفنا بيئة العمل لضمان أن التثبيتات السابقة مرئية
         run: |
           flet build apk --yes --verbose
       
