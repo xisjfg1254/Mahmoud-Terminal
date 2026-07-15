@@ -5,107 +5,89 @@ import pandas as pd
 # حالة التطبيق
 app_state = {
     "price": 0.0,
-    "status": "WAITING...",
-    "indicators": {"RSI": "WAIT", "EMA": "WAIT", "MACD": "WAIT", "BB": "WAIT"},
-    "master_signal": "WAIT"
+    "status": "SCANNING...",
+    "indicators": {
+        "EMA200": {"val": 0.0, "status": "WAIT", "tp": "---", "sl": "---"},
+        "ADX": {"val": 0.0, "status": "WAIT", "tp": "---", "sl": "---"},
+        "RSI": {"val": 0.0, "status": "WAIT", "tp": "---", "sl": "---"},
+        "MACD": {"val": 0.0, "status": "WAIT", "tp": "4038.0", "sl": "4030.1"},
+        "EMA_F": {"val": 0.0, "status": "WAIT", "tp": "4030.1", "sl": "4036.4"},
+        "BB": {"val": 0.0, "status": "WAIT", "tp": "---", "sl": "---"}
+    }
 }
 
-# دالة الألوان والرموز (تم تحديثها لتناسب التحديث الجديد)
-def get_style(status):
-    if status == "BUY": return ft.Colors.GREEN_ACCENT, ft.Icons.CIRCLE
-    if status == "SELL": return ft.Colors.RED_ACCENT, ft.Icons.CIRCLE
-    return ft.Colors.YELLOW, ft.Icons.CIRCLE
+def get_color(status):
+    if "BUY" in status: return ft.Colors.GREEN_ACCENT
+    if "SELL" in status or "BEARISH" in status: return ft.Colors.RED_ACCENT
+    if "WAIT" in status or "WEAK" in status: return ft.Colors.YELLOW
+    return ft.Colors.WHITE
 
-# الحسابات اليدوية
-def calculate_indicators(df):
-    close = df['close']
-    delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    ema = close.ewm(span=200, adjust=False).mean()
-    macd = close.ewm(span=12, adjust=False).mean() - close.ewm(span=26, adjust=False).mean()
-    sma = close.rolling(20).mean()
-    std = close.rolling(20).std()
-    return rsi.iloc[-1], ema.iloc[-1], macd.iloc[-1], (sma + (std * 2)).iloc[-1], (sma - (std * 2)).iloc[-1]
-
-def create_indicator_card(title, key):
+def create_row(label, key):
+    # هذا التصميم الذي سيظهر بشكل "ليست" أو Terminal
     return ft.Container(
-        content=ft.Column([
-            ft.Text(title, size=10, color=ft.Colors.GREY_400),
-            ft.Row([ft.Icon(ft.Icons.CIRCLE, size=12, color=ft.Colors.YELLOW, key=f"icon_{key}"), 
-                    ft.Text("WAIT", size=14, weight="bold", key=key)], alignment=ft.MainAxisAlignment.CENTER)
-        ], alignment=ft.MainAxisAlignment.CENTER),
-        padding=10, bgcolor=ft.Colors.BLUE_GREY_900, border_radius=15, width=85, height=70
+        content=ft.Row([
+            ft.Text(f"{label:<12}", size=13, weight="bold", font_family="Monospace"),
+            ft.Text("---", size=13, font_family="Monospace", key=f"val_{key}"),
+            ft.Text("[WAIT]", size=13, weight="bold", font_family="Monospace", color=ft.Colors.YELLOW, key=f"stat_{key}"),
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        padding=ft.padding.symmetric(vertical=5),
+        border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_800))
     )
 
-def trading_engine(api_key, timeframe):
-    global app_state
-    def on_message(ws, message):
-        data = json.loads(message)
-        if 'price' in data: app_state["price"] = float(data['price'])
-
-    ws = websocket.WebSocketApp(f"wss://ws.twelvedata.com/v1/quotes/price?apikey={api_key}", on_message=on_message)
-    threading.Thread(target=ws.run_forever, daemon=True).start()
-
-    while True:
-        try:
-            url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval={timeframe}&apikey={api_key}"
-            response = requests.get(url, timeout=10).json()
-            if 'values' in response:
-                df = pd.DataFrame(response['values']).iloc[::-1].reset_index(drop=True)
-                df['close'] = df['close'].astype(float)
-                rsi, ema, macd, upper, lower = calculate_indicators(df)
-                
-                app_state["indicators"]["RSI"] = "BUY" if rsi < 35 else ("SELL" if rsi > 65 else "WAIT")
-                app_state["indicators"]["EMA"] = "BUY" if app_state["price"] > ema else "SELL"
-                app_state["indicators"]["MACD"] = "BUY" if macd > 0 else "SELL"
-                app_state["indicators"]["BB"] = "BUY" if app_state["price"] < lower else ("SELL" if app_state["price"] > upper else "WAIT")
-                
-                buys = list(app_state["indicators"].values()).count("BUY")
-                sells = list(app_state["indicators"].values()).count("SELL")
-                app_state["master_signal"] = "BUY" if buys >= 2 else ("SELL" if sells >= 2 else "WAIT")
-        except: app_state["status"] = "ERROR"
-        time.sleep(30)
-
 def main(page: ft.Page):
-    page.title = "Mahmoud Quantum Terminal"
+    page.title = "Quantum Terminal Pro"
     page.theme_mode = ft.ThemeMode.DARK
-    
-    api_field = ft.TextField(label="API Key", password=True)
-    tf_dropdown = ft.Dropdown(label="Timeframe", options=[ft.dropdown.Option("1min"), ft.dropdown.Option("5min"), ft.dropdown.Option("1h")])
-    
-    cards = ft.Row([create_indicator_card("RSI", "RSI"), create_indicator_card("EMA", "EMA"), create_indicator_card("MACD", "MACD"), create_indicator_card("BB", "BB")], alignment=ft.MainAxisAlignment.CENTER)
+    page.padding = 10
 
-    def start_app(e):
-        page.clean()
-        page.add(ft.Text("QUANTUM TERMINAL", size=25, color=ft.Colors.GREEN, weight="bold"), 
-                 ft.Text("0.00", size=40, key="price_text"), cards)
-        threading.Thread(target=trading_engine, args=(api_field.value, tf_dropdown.value), daemon=True).start()
-        threading.Thread(target=update_ui, args=(page,), daemon=True).start()
+    # الواجهة (Layout)
+    market_price = ft.Text("Market Price : 0.00", size=20, weight="bold", color=ft.Colors.WHITE)
+    mode_text = ft.Text("MODE : PRO SCALPING (5min)", color=ft.Colors.GREEN_ACCENT, weight="bold")
+    status_text = ft.Text("Status : SCANNING...", color=ft.Colors.YELLOW)
 
-    def update_ui(page):
+    rows_container = ft.Column(controls=[
+        create_row("EMA200", "EMA200"),
+        create_row("ADX", "ADX"),
+        create_row("RSI", "RSI"),
+        create_row("MACD", "MACD"),
+        create_row("EMA_F", "EMA_F"),
+        create_row("BB", "BB"),
+    ])
+
+    dashboard = ft.Container(
+        content=ft.Column([
+            mode_text,
+            ft.Divider(),
+            market_price,
+            ft.Divider(),
+            rows_container,
+            ft.Divider(),
+            status_text
+        ]),
+        border=ft.border.all(1, ft.Colors.GREY_700),
+        border_radius=10,
+        padding=15
+    )
+
+    page.add(dashboard)
+
+    # وظيفة التحديث (Simulation) - يمكنك ربطها بـ trading_engine لاحقاً
+    def update_loop():
         while True:
             # تحديث السعر
-            price_txt = page.get_control("price_text")
-            if price_txt: price_txt.value = f"{app_state['price']:,.2f}"
+            market_price.value = f"Market Price : {app_state['price']:.2f}"
             
-            for c in cards.controls:
-                # الوصول للعناصر المحددة
-                row_container = c.content.controls[1]
-                icon = row_container.controls[0]
-                text = row_container.controls[1]
-                key = text.key
-                
-                val = app_state["indicators"].get(key, "WAIT")
-                color, icon_type = get_style(val)
-                icon.color = color
-                text.value = val
-                text.color = color
+            # تحديث المؤشرات
+            for key in app_state["indicators"]:
+                val_text = page.get_control(f"val_{key}")
+                stat_text = page.get_control(f"stat_{key}")
+                if val_text and stat_text:
+                    val_text.value = f"{app_state['indicators'][key]['val']:.2f}"
+                    stat_text.value = f"[{app_state['indicators'][key]['status']}]"
+                    stat_text.color = get_color(app_state['indicators'][key]['status'])
+            
             page.update()
             time.sleep(1)
 
-    page.add(ft.Text("LOGIN", size=20), api_field, tf_dropdown, ft.ElevatedButton("START", on_click=start_app))
+    threading.Thread(target=update_loop, daemon=True).start()
 
 ft.app(target=main)
