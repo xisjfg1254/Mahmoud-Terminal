@@ -14,16 +14,20 @@ jobs:
       - name: Install dependencies
         run: |
           pip install flet
-          # التأكد من وجود ملف requirements.txt قبل التثبيت
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Build APK
-        # أضفنا --yes هنا لتجاوز موافقة تثبيت Flutter تلقائياً
         run: |
           flet build apk --yes
+      
+      # هذه الخطوة ستطبع لنا مكان الملف بالضبط في السجلات (Logs)
+      - name: Find and Print APK path
+        run: |
+          find . -name "*.apk"
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-apk
-          path: build/apk/*.apk
+          # الرمز ** يعني ابحث في كل المجلدات الفرعية
+          path: "**/*.apk"
