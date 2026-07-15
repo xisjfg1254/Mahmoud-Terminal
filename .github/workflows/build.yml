@@ -11,7 +11,7 @@ jobs:
         with:
           python-version: '3.10'
       
-      # هذه الخطوة لحل مشكلة GTK التي ظهرت في الأخطاء
+      # تثبيت المكتبات اللازمة للنظام
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -21,6 +21,11 @@ jobs:
         run: |
           pip install flet
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      # هذه الخطوة هي المفتاح: قبول تراخيص أندرويد تلقائياً
+      - name: Accept Android licenses
+        run: |
+          yes "y" | flutter doctor --android-licenses
       
       - name: Build APK
         run: |
