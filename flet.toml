@@ -1,0 +1,5 @@
+[app]
+name = "MahmoudTerminal"
+module = "sun.py"
+product_name = "MahmoudTerminal"
+version = "1.0.0"
