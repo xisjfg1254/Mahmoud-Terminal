@@ -1,5 +1,5 @@
 [app]
 name = "MahmoudTerminal"
-module = "sun.py"
+module = "main.py"
 product_name = "MahmoudTerminal"
 version = "1.0.0"
