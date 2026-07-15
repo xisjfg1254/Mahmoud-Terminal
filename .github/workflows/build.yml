@@ -11,19 +11,20 @@ jobs:
         with:
           python-version: '3.10'
       
+      # هذه الخطوة لحل مشكلة GTK التي ظهرت في الأخطاء
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
+      
       - name: Install dependencies
         run: |
           pip install flet
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
-      # هذه الخطوة ستخبرنا أين يقع الملف بالضبط، إذا فشلت، فالمشكلة في المسار
-      - name: Debug - List Files
-        run: ls -la
-      
-      # هذه الخطوة ستحاول البناء مع تحديد الملف يدوياً
       - name: Build APK
         run: |
-          flet build apk --module-name main.py --yes
+          flet build apk --yes
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
