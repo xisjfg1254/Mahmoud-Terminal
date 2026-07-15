@@ -14,12 +14,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install flet
-          # تأكد أن flet موجود في requirements.txt أيضاً
-          pip install -r requirements.txt
+          # التأكد من وجود ملف requirements.txt قبل التثبيت
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       
       - name: Build APK
+        # أضفنا --yes هنا لتجاوز موافقة تثبيت Flutter تلقائياً
         run: |
-          flet build apk
+          flet build apk --yes
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
