@@ -1,5 +1,5 @@
 flet
 requests
 pandas
-ta
 websocket-client
+pandas-ta
