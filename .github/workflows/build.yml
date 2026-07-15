@@ -11,21 +11,15 @@ jobs:
         with:
           python-version: '3.10'
       
-      # هذه الخطوة ستقوم بتثبيت Flutter في النظام
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-      
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Accept Android licenses
         run: |
-          yes "y" | flutter doctor --android-licenses
+          pip install flet
+          # تأكد أن flet موجود في requirements.txt أيضاً
+          pip install -r requirements.txt
       
       - name: Build APK
         run: |
-          flet build apk --project "MahmoudTerminal" --module-name sun.py
+          flet build apk
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
