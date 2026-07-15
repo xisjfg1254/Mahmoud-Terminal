@@ -1,1 +1,5 @@
-
+flet
+requests
+pandas
+ta
+websocket-client
